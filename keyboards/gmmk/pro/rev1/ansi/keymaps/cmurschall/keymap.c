@@ -60,6 +60,17 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 };
 // clang-format on
 
+
+void keyboard_post_init_user(void) {
+  // Customise these values to desired behaviour
+  debug_enable=false;
+  debug_matrix=false;
+  //debug_keyboard=true;
+  //debug_mouse=true;
+}
+
+
+
 #ifdef ENCODER_ENABLE
 bool encoder_update_user(uint8_t index, bool clockwise) {
     if (clockwise) {
