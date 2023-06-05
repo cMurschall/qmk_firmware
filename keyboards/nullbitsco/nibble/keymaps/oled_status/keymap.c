@@ -20,6 +20,16 @@
 #endif
 
 
+#ifdef SNAKE_ENABLE
+#    include "snake.h"
+#endif
+
+
+#ifdef CONWAY_ENABLE
+#    include "conway.h"
+#endif
+
+
 // bool has_layer_changed = false;
 // static uint8_t current_layer;
 
@@ -56,9 +66,16 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 };
 // clang-format on
 
+
+void keyboard_post_init_user(void) {
+   
+}
+
+
 #ifdef OLED_ENABLE
 oled_rotation_t oled_init_user(oled_rotation_t rotation) {
     oled_timer = timer_read32();
+    toelter_logo_timer = timer_read32();
     set_oled_mode(OLED_MODE_IDLE);
     return OLED_ROTATION_0;
 }
@@ -119,13 +136,8 @@ void matrix_init_user(void) {
 void matrix_scan_user(void) {
     // Scan and parse keystrokes from remote keyboard, if connected (see readme)
     matrix_scan_remote_kb();
+#ifdef CONWAY_ENABLE
+    // conway();
+#endif
 
-
-    // // look for layer change
-    // if (current_layer == layer) {
-    //     has_layer_changed = false;
-    // } else {
-    //     has_layer_changed = true;
-    //     current_layer = layer;
-    // }
 }

@@ -24,6 +24,9 @@ typedef enum {
 } oled_mode_t;
 
 uint16_t oled_timer;
+uint16_t toelter_logo_timer;
+
+
 oled_mode_t oled_mode;
 
 void set_oled_mode(oled_mode_t mode);

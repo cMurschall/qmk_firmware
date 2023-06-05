@@ -55,4 +55,8 @@
 
 
 
-#define RGBLIGHT_SLEEP
+// #define RGBLIGHT_SLEEP
+
+/* Optional encoder pins */
+#define ENCODERS_PAD_A { B5 }
+#define ENCODERS_PAD_B { B4 }
