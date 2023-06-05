@@ -17,5 +17,6 @@
 
 // Referenced custom font
 #ifdef OLED_ENABLE
-#    define OLED_FONT_H "keyboards/nullbitsco/nibble/keymaps/oled_status/glcdfont.c"
+#define OLED_FONT_H "keyboards/nullbitsco/nibble/keymaps/oled_status/glcdfont.c"
 #endif
+
