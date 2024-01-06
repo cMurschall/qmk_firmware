@@ -153,11 +153,11 @@ void process_record_encoder_oled(uint16_t keycode) {
 
 void process_record_keymap_oled(uint16_t keycode) {
     oled_timer = timer_read32();
-    if(rgblight_is_enabled()) {
-        set_oled_mode(OLED_MODE_RGB_OFF);
-    } else {
-        set_oled_mode(OLED_MODE_RGB_ON);
-    }
+    // if(rgblight_is_enabled()) {
+    //     set_oled_mode(OLED_MODE_RGB_OFF);
+    // } else {
+    //     set_oled_mode(OLED_MODE_RGB_ON);
+    // }
 }
 
 
@@ -192,7 +192,7 @@ void render_status_mode_message(void) {
     oled_write_P(PSTR("\n\n"), false);
 }
 
-void render_frame(void) {
+void render_status_frame(void) {
     switch (oled_mode) {
         case OLED_MODE_VOLUME_UP:
         case OLED_MODE_VOLUME_DOWN:

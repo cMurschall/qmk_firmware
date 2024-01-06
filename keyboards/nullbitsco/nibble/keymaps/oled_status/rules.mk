@@ -3,7 +3,8 @@ OLED_DRIVER = SSD1306
 WPM_ENABLE = no
 VIA_ENABLE = no
 SNAKE_ENABLE = no
-CONWAY_ENABLE = no
+CONWAY_ENABLE = yes
+RGBLIGHT_ENABLE = no
 
 ifeq ($(strip $(OLED_ENABLE)), yes)
 	SRC += oled_display.c

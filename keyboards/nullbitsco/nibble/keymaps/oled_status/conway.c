@@ -1,377 +1,116 @@
-/* Copyright 2022 Daniel Ostertag (Dakes) <dakes@vivaldi.net>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-
-#include <stdint.h>
 #include QMK_KEYBOARD_H
 #include "conway.h"
 
-# ifdef CONWAY_RENDER  // only compiled into side, where conway is actually displayed
+bool current_gen[HEIGHT][WIDTH];
+bool next_gen[HEIGHT][WIDTH];
+bool seeding = true; 
+const short seed_startpos_h = HEIGHT / 2 - SEED_HEIGHT / 2;
+const short seed_startpos_w = WIDTH / 2 - SEED_WIDTH / 2;
+short seed_offset = 0;
 
-// Columns saved as Bit"fields" -> int size for field height. (32 -> uint32_t)
-#define SET_CELL(BF, N) BF |=  ((uint32_t) 1 << N)
-#define CLR_CELL(BF, N) BF &= ~((uint32_t) 1 << N)
-#define CELL_LIVE(BF, N) ((BF >> N) & 1)
 
-// The game field
-static uint32_t field[WC] = {};
-
-// draws an individuel cell (usually 4 pixel large)
-void render_cell(uint8_t x, uint8_t y, bool on)
+void render_conway_grid(void) 
 {
-    // TODO: render cell dynamically, depending on scaling
-    uint8_t xo = x*SCALING;
-    uint8_t yo = y*SCALING;
-    oled_write_pixel(xo,   yo,   on);
-    oled_write_pixel(xo+1, yo,   on);
-    oled_write_pixel(xo,   yo+1, on);
-    oled_write_pixel(xo+1, yo+1, on);
-}
-
-
-void render_column(uint32_t field[WC], uint8_t x)
-{
-    for(uint8_t y=0; y<HC; y++)
-        render_cell(x, y, CELL_LIVE(field[x], y));
-}
-
-# ifdef GOSPER_GLIDER_GUN
-void gosper_glider_gun(uint32_t field[WC], uint8_t x, uint8_t y)
-{
-    SET_CELL(field[1+x],  (5+y));
-    SET_CELL(field[1+x],  (6+y));
-    SET_CELL(field[2+x],  (5+y));
-    SET_CELL(field[2+x],  (6+y));
-
-    SET_CELL(field[11+x], (5+y));
-    SET_CELL(field[11+x], (6+y));
-    SET_CELL(field[11+x], (7+y));
-    SET_CELL(field[12+x], (4+y));
-    SET_CELL(field[12+x], (8+y));
-    SET_CELL(field[13+x], (3+y));
-    SET_CELL(field[13+x], (9+y));
-    SET_CELL(field[14+x], (3+y));
-    SET_CELL(field[14+x], (9+y));
-    SET_CELL(field[15+x], (6+y));
-    SET_CELL(field[16+x], (4+y));
-    SET_CELL(field[16+x], (8+y));
-    SET_CELL(field[17+x], (5+y));
-    SET_CELL(field[17+x], (6+y));
-    SET_CELL(field[17+x], (7+y));
-    SET_CELL(field[18+x], (6+y));
-
-    SET_CELL(field[21+x], (3+y));
-    SET_CELL(field[21+x], (4+y));
-    SET_CELL(field[21+x], (5+y));
-    SET_CELL(field[22+x], (3+y));
-    SET_CELL(field[22+x], (4+y));
-    SET_CELL(field[22+x], (5+y));
-    SET_CELL(field[23+x], (2+y));
-    SET_CELL(field[23+x], (6+y));
-    SET_CELL(field[25+x], (1+y));
-    SET_CELL(field[25+x], (2+y));
-    SET_CELL(field[25+x], (6+y));
-    SET_CELL(field[25+x], (7+y));
-    SET_CELL(field[35+x], (3+y));
-    SET_CELL(field[35+x], (4+y));
-    SET_CELL(field[36+x], (3+y));
-    SET_CELL(field[36+x], (4+y));
-}
-#endif  // GOSPER_GLIDER_GUN
-
-# ifdef BEACON
-void beacon(uint32_t field[WC], uint8_t x, uint8_t y)
-{
-    SET_CELL(field[1+x], (1+y));
-    SET_CELL(field[1+x], (2+y));
-    SET_CELL(field[2+x], (1+y));
-    SET_CELL(field[3+x], (4+y));
-    SET_CELL(field[4+x], (3+y));
-    SET_CELL(field[4+x], (4+y));
-}
-#endif  // BEACON
-
-void advance_prev_state(uint32_t field[WC], uint32_t prev_state[2], uint8_t idx_x)
-{
-    prev_state[0] = prev_state[1];
-    prev_state[1] = field[idx_x+1];
-}
-
-/**
- * Each step advances scanning column only by one to right.
- * Called once per matrix scan
- * */
-void step(uint32_t field[WC])
-{
-    static uint8_t x = 1;
-
-    // render current column, before advancing game, to display just toggled single live cells
-    render_column(field, x);
-    if (x == 1)
-        render_column(field, 0);
-    else if (x >= WC-1)
-        render_column(field, WC);
-
-    // tmp array to compute the new game state
-    // previous state for this slice will be copied into it
-    static uint32_t prev_state[2] = {};
-    if (x <= 1)
-    {
-        prev_state[0] = field[0];
-        prev_state[1] = field[1];
-    }
-
-    for(uint8_t y=1; y<HC; y++)
-    {
-        // actual game algorithm
-        // calculate new state for slice "prev_state"
-        uint8_t alive_neighbors = 0;
-
-        if (CELL_LIVE(prev_state[0], (y-1)))
-            alive_neighbors ++;
-        if (CELL_LIVE(prev_state[1], (y-1)))
-            alive_neighbors ++;
-        if (CELL_LIVE(field[x+1],    (y-1)))
-            alive_neighbors ++;
-        if (CELL_LIVE(field[x+1],    (y  )))
-            alive_neighbors ++;
-        if (CELL_LIVE(field[x+1],    (y+1)))
-            alive_neighbors ++;
-        if (CELL_LIVE(prev_state[1], (y+1)))
-            alive_neighbors ++;
-        if (CELL_LIVE(prev_state[0], (y+1)))
-            alive_neighbors ++;
-        if (CELL_LIVE(prev_state[0], (y  )))
-            alive_neighbors ++;
-
-        if (alive_neighbors == 3)
-            SET_CELL(field[x], y);
-        else if (CELL_LIVE(prev_state[1], y) && alive_neighbors == 2 ){}
-        else
-            CLR_CELL(field[x], y);
-    }
-
-    
-    if (x<WC-1)
-    {
-        advance_prev_state(field, prev_state, x);
-        x++;
-    }
-    else
-    {
-        // end of field. Reset to beginning and kill edges.
-        x = 1;
-#       ifdef EGDE_KILL
-        for(uint8_t x=0; x<WC; x++)
-            for(uint8_t y=0; y<HC; y++)
-                if(y == 0 || y == HC-1 || x == 0 || x == WC-1)
-                    CLR_CELL(field[x], y);
-#       endif
-    }
-}
-
-/**
- * Called from matrix_scan_user.
- * Maybe you have to add a timer, if it is running too fast.
- * */
-void conway(void)
-{
-    static bool structures_set = false;
-
-    // initial spawn in of structures on boot
-    if (structures_set == false)
-    {
-#       ifdef GOSPER_GLIDER_GUN
-        gosper_glider_gun(field, GOSPER_GLIDER_GUN);
-#       endif
-#       ifdef BEACON
-        beacon(field, BEACON);
-#       endif
-
-        // create your own structures like this: SET_CELL(field[x], y);
-        /*
-        SET_CELL(field[3], 3);
-        SET_CELL(field[3], 4);
-        SET_CELL(field[3], 5);
-        */
-        structures_set = true;
-    }
-    
-    step(field);
-}
-
-/**
- * on master called from  process_record_user->conway_calc_spawn_pos->conway_spawn_in
- * on slave called by user_sync_a_slave_handler->conway_spawn_in
- * Spawns in live cells, depending on keypress
- * */
-void conway_spawn_in(const conway_spawn_coordinates* csc)
-{
-    SET_CELL(field[csc->x+MATRIX_POS_X], (csc->y+MATRIX_POS_Y));
-
-#   ifdef HELD_SPAWN
-    if (csc->level > 0)
-    {
-        uint8_t nbit = 0;
-        uint8_t rand = random();
-        // Toggle cells in radius 1, 2, 3 pseudo randomly
-        if (csc->level == 1) // Ring +1
-        {
-            for(int8_t xo=-1; xo<=1; xo++)
-                for(int8_t yo=-1; yo<=1; yo++)
-                {
-                    if ((rand >> nbit%16) & 1)
-                        SET_CELL(field[csc->x+xo+MATRIX_POS_X], (csc->y+yo+MATRIX_POS_Y));
-                    nbit++;
-                }
-        }
-        else if (csc->level == 2) // Ring +2
-        {
-            for(int8_t xo=-2; xo<=2; xo++)
-                for(int8_t yo=-2; yo<=2; yo++)
-                {
-                    if ((rand >> nbit%16) & 1)
-                        SET_CELL(field[csc->x+xo+MATRIX_POS_X], (csc->y+yo+MATRIX_POS_Y));
-                    nbit++;
-                }
-        }
-        else if (csc->level >= 3) // Ring +3
-        {
-            for(int8_t xo=-3; xo<=3; xo++)
-                for(int8_t yo=-3; yo<=3; yo++)
-                {
-                    if ((rand >> nbit%16) & 1)
-                        SET_CELL(field[csc->x+xo+MATRIX_POS_X], (csc->y+yo+MATRIX_POS_Y));
-                    nbit++;
-                }
+    for(int i = 0; i < OLED_DISPLAY_HEIGHT; i++) {
+        for(int j = 0; j < OLED_DISPLAY_WIDTH; j++) {
+             // oled_write_pixel(j, i, current_gen[i][j]);
+             oled_write_pixel(j, i, current_gen[i][j]);
         }
     }
-#   endif  // HELD_SPAWN
 }
-
-// // dummy oled_task_user, to overwrite the keyboards default one
-// bool oled_task_user(void)
-// {
-//     return false;
-// }
-
-// __attribute__((weak)) void housekeeping_task_user(void)
-// {
-//     // Add this to your own keymap, if you are using this function. (with ifdef)
-// #   ifdef CONWAY_RENDER
-//     conway();
-// #   endif
-// }
-
-#endif  // CONWAY_RENDER
-
-/**
- * Will only run on master. Called by process_record_user->conway_process_record_user->conway_calc_spawn_pos
- * */
-conway_spawn_coordinates conway_calc_spawn_pos(uint16_t keycode, keyrecord_t *record)
+int count_neighbours(int row, int col) 
 {
-    uint8_t x = record->event.key.col;
-    uint8_t y = record->event.key.row;
-
-#   ifdef KYRIA_MATRIX_FIX
-    if (y >= 4)
-    {
-        y = y-4;
-        x = x+8;
+    int count = 0;
+    for(int i = -1; i <= 1; i++) {
+        for(int j = -1; j <= 1; j++) {
+            if (i == 0 && j == 0) continue;
+            int r = (row + i + HEIGHT) % HEIGHT;
+            int c = (col + j + WIDTH) % WIDTH;
+            if(current_gen[r][c]) {
+                count++;
+            }
+        }
     }
-    else
-        x = 7-x;
-#   endif // KYRIA_MATRIX_FIX
-
-    struct conway_spawn_coordinates csc = {x, y, 0};
-
-#   ifdef HELD_SPAWN
-    static uint16_t prev_keycode = 0;
-    static uint16_t prev_time = 0;
-    if (prev_keycode == 0 && record->event.pressed == 1 && keycode != 224)
-    {
-        prev_keycode = keycode;
-        prev_time = record->event.time;
-    }
-    if (keycode == prev_keycode && record->event.pressed == 0)
-    {
-        uint16_t passed_time = record->event.time - prev_time;
-        prev_keycode = 0;
-
-        // Toggle cells in radius 1, 2, 3 pseudo randomly
-        if (passed_time >= SPAWN_INTERVAL_1 && passed_time < SPAWN_INTERVAL_2) // Ring +1
-            csc.level = 1;
-        else if (passed_time >= SPAWN_INTERVAL_2 && passed_time < SPAWN_INTERVAL_3) // Ring +2
-            csc.level = 2;
-        else if (passed_time >= SPAWN_INTERVAL_3) // Ring +3
-            csc.level = 3;
-    }
-#   endif  // HELD_SPAWN
-
-    // same half, no sync needed. Spawn points directly.
-#   ifdef MASTER_HALF
-#   ifdef CONWAY_RENDER
-    conway_spawn_in(&csc);
-#   endif
-#   endif
-    return csc;
+    return count;
 }
 
-/**
- * Runs on slave to receive spawn in data
- * */
-// void user_sync_a_slave_handler(uint8_t in_buflen, const void* in_data, uint8_t out_buflen, void* out_data)
-// {
-// #   ifdef CONWAY_RENDER
-//     const conway_spawn_coordinates *csc = (const conway_spawn_coordinates*)in_data;
-//     conway_spawn_in(csc);
-// #   endif
-// }
+void update_state(void) 
+{
+    for(int i = 0; i < HEIGHT; i++) {
+        for(int j = 0; j < WIDTH; j++) {
+            int neighbours = count_neighbours(i, j);
+            if(current_gen[i][j]) {
+                next_gen[i][j] = !(neighbours < 2 || neighbours > 3);
+            } else {
+                next_gen[i][j] = (neighbours == 3);
+            }
+        }
+    }
 
+    for(int i = 0; i < HEIGHT; i++) {
+        for(int j = 0; j < WIDTH; j++) {
+            current_gen[i][j] = next_gen[i][j];
+        }
+    }
+}
 
-// void conway_keyboard_post_init_user(void)
-// {
-//     transaction_register_rpc(CONWAY_SYNC, user_sync_a_slave_handler);
-// }
+void start_state_machine(void)
+{
+    seeding = false;
+}
 
-// __attribute__((weak)) void keyboard_post_init_user(void)
-// {
-//     // Add this to your own keymap, if you are using this function.
-//     conway_keyboard_post_init_user();
-// }
+void reset_state_machine(void) 
+{
+    seeding = true;
+    seed_offset = 0;
+    for(int i = 0; i < HEIGHT; i++) {
+        for(int j = 0; j < WIDTH; j++) {
+            current_gen[i][j] = false;
+        }
+    }
+}
 
-/**
- * Calculate position, where to spawn in points and sync them to the slave. 
- *  */
-// void conway_process_record_user(uint16_t keycode, keyrecord_t *record)
-// {
-// #   ifdef MASTER_HALF
-//     if (is_keyboard_master())
-//     {
-//         conway_spawn_coordinates csc = conway_calc_spawn_pos(keycode, record);
-//         transaction_rpc_send(CONWAY_SYNC, sizeof(csc), &csc);
-//     }
-// #   endif
-// }
+void add_seed(uint16_t keycode)
+{
+    int row = seed_startpos_h + seed_offset / SEED_HEIGHT;
+    int col = seed_startpos_w + seed_offset % SEED_WIDTH;
+    switch(keycode) {
+        case SPACE:
+            seed_offset++;  
+            break;
+        case ROWSPACE:
+            seed_offset += SEED_WIDTH;
+            break;
+        default:
+            current_gen[row][col] = true;
+            seed_offset++;
+    }
 
-// __attribute__((weak)) bool process_record_user(uint16_t keycode, keyrecord_t *record)
-// {
-//     // Add this to your own keymap, if you are using this function.
-//     conway_process_record_user(keycode, record);
+    if(seed_offset > SEED_WIDTH * SEED_HEIGHT - 1) {
+        seeding = false;
+        seed_offset = 0;
+    }
+}
 
-//     return true;
-// }
-
+void process_record_conway(uint16_t keycode)
+{
+    switch (keycode) {
+        case START:
+            uprintf("start_state_machine \n");
+            start_state_machine();
+            break;
+        case RESET:
+            uprintf("reset_state_machine \n");
+            reset_state_machine();
+            break;
+        default:
+            if(seeding) {
+                uprintf("add_seed \n");
+                add_seed(keycode);
+            } else {
+                uprintf("update_state \n");
+                update_state();
+            }
+    }
+    // render_grid();
+}

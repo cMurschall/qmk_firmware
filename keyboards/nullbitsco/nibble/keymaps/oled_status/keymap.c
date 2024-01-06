@@ -33,7 +33,7 @@
 // bool has_layer_changed = false;
 // static uint8_t current_layer;
 
-enum layer_names { _MA, _FN, _SNAKE };
+enum layer_names { _MA, _FN, _SNAKE, _CONWAY };
 
 enum custom_keycodes {
     KC_CUST = SAFE_RANGE,
@@ -53,7 +53,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
                  QK_BOOT, KC_F1,   KC_F2,     KC_F3,   KC_F4,   KC_F5,   KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_F11,  KC_F12,  _______,  KC_END,
         RGB_TOG, _______, _______, _______,   _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
         RGB_MOD, _______, _______,TO(_SNAKE), _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
-        _______, _______, _______, _______,   _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
+        _______, _______, _______, _______, TO(_CONWAY), _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
         _______, _______, _______, _______,                     _______,                   _______, _______, _______, _______,          _______, _______
     ),
     [_SNAKE] = LAYOUT_ansi(
@@ -63,6 +63,13 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          KC_UP  , _______,
         _______, _______, _______, _______,                   _______,                   _______, _______, _______, KC_LEFT,          KC_DOWN, KC_RGHT
     ),
+    [_CONWAY] = LAYOUT_ansi(
+                 TO(_MA), _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
+        _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
+        _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
+        _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          KC_UP  , _______,
+        _______, _______, _______, _______,                   _______,                   _______, _______, _______, KC_LEFT,          KC_DOWN, KC_RGHT
+    ),    
 };
 // clang-format on
 
@@ -71,20 +78,35 @@ void keyboard_post_init_user(void) {
    
 }
 
-
 #ifdef OLED_ENABLE
 oled_rotation_t oled_init_user(oled_rotation_t rotation) {
-    oled_timer = timer_read32();
+    oled_timer         = timer_read32();
     toelter_logo_timer = timer_read32();
     set_oled_mode(OLED_MODE_IDLE);
     return OLED_ROTATION_0;
 }
 
 bool oled_task_user(void) {
-    if (timer_elapsed(oled_timer) >= 3000) {
-        set_oled_mode(OLED_MODE_IDLE);
+    switch (get_highest_layer(layer_state)) {
+        case _MA:
+        case _FN: {
+            if (timer_elapsed(oled_timer) >= 3000) {
+                set_oled_mode(OLED_MODE_IDLE);
+            }
+            render_status_frame();
+        } break;
+        case _SNAKE:
+            oled_write_P(PSTR("snake"), false);
+            break;
+        case _CONWAY:
+            render_conway_grid();
+            break;
+
+        default:
+            // Or use the write_ln shortcut over adding '\n' to the end of your string
+            oled_write_ln_P(PSTR("Undefined"), false);
     }
-    render_frame();
+
     return false;
 }
 #endif
@@ -93,12 +115,20 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // Send keystrokes to host keyboard, if connected (see readme)
     process_record_remote_kb(keycode, record);
 
+#ifdef CONWAY_ENABLE
+    if (IS_LAYER_ON(_CONWAY) && record->event.pressed) {
+        process_record_conway(keycode);
+        return true;
+    }
+#endif
+
     switch (keycode) {
         case RGB_TOG:
             if (record->event.pressed) {
 #ifdef OLED_ENABLE
                 process_record_keymap_oled(keycode);
 #endif
+
             }
             break;
         case KC_CUST: // custom macro
@@ -136,8 +166,5 @@ void matrix_init_user(void) {
 void matrix_scan_user(void) {
     // Scan and parse keystrokes from remote keyboard, if connected (see readme)
     matrix_scan_remote_kb();
-#ifdef CONWAY_ENABLE
-    // conway();
-#endif
 
 }

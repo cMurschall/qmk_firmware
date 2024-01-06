@@ -41,4 +41,4 @@ void render_idle(void);
 
 void render_status_mode_message(void);
 
-void render_frame(void);
+void render_status_frame(void);
