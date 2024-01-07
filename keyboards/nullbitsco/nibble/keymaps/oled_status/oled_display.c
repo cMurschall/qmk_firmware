@@ -16,21 +16,9 @@
 #include "quantum.h"
 #include "oled_display.h"
 
-static const char PROGMEM oled_mode_messages[5][15] = {
-    "",
-    "Volume Up",
-    "Volume Down",
-    "RGB ON",
-    "RGB OFF"
-};
+static const char PROGMEM oled_mode_messages[5][15] = {"", "Volume Up", "Volume Down", "RGB ON", "RGB OFF"};
 
-static const char PROGMEM oled_mode_icons[5][3][5] = {
-    {{128,129,130,131,0},{160,161,162,163,0},{192,193,194,195,0}},
-    {{132,133,134,135,0},{164,165,166,167,0},{196,197,198,199,0}},
-    {{136,137,138,139,0},{168,169,170,171,0},{200,201,202,203,0}},
-    {{140,141,142,143,0},{172,173,174,175,0},{204,205,206,207,0}},
-    {{144,145,146,147,0},{176,177,178,179,0},{208,209,210,211,0}}
-};
+static const char PROGMEM oled_mode_icons[5][3][5] = {{{128, 129, 130, 131, 0}, {160, 161, 162, 163, 0}, {192, 193, 194, 195, 0}}, {{132, 133, 134, 135, 0}, {164, 165, 166, 167, 0}, {196, 197, 198, 199, 0}}, {{136, 137, 138, 139, 0}, {168, 169, 170, 171, 0}, {200, 201, 202, 203, 0}}, {{140, 141, 142, 143, 0}, {172, 173, 174, 175, 0}, {204, 205, 206, 207, 0}}, {{144, 145, 146, 147, 0}, {176, 177, 178, 179, 0}, {208, 209, 210, 211, 0}}};
 
 static const char PROGMEM toelter_logo_1[4][50] = {{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0xc0, 0xc0, 0xe0, 0xf0, 0xf0, 0xf8, 0xfc, 0xfc, 0xfc, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfc, 0x00, 0x00, 0x00, 0x00},
                                                    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0xe0, 0xe0, 0xf0, 0xf8, 0xf8, 0xfc, 0xfc, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0x07, 0x01, 0x07, 0x0f, 0x0f, 0x0f, 0x02, 0x00, 0x00, 0x00},
@@ -72,54 +60,62 @@ static const char PROGMEM toelter_logo_8[4][50] = {{0x00, 0x00, 0x00, 0x00, 0x00
                                                    {0x00, 0x70, 0x78, 0x3c, 0x3e, 0x3e, 0x3f, 0x1f, 0x0f, 0x07, 0xc3, 0xf9, 0xfc, 0x3e, 0x3f, 0x1f, 0x1f, 0x0f, 0x3f, 0xff, 0xff, 0xff, 0xff, 0x07, 0x03, 0x03, 0x03, 0x03, 0x07, 0x07, 0xff, 0xff, 0xff, 0x3f, 0x0f, 0x07, 0x07, 0x03, 0x03, 0x63, 0xe7, 0xff, 0x7f, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
                                                    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x38, 0x3f, 0x1f, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x03, 0x0f, 0x1e, 0x3c, 0x38, 0x30, 0x00, 0x00, 0x3e, 0x3f, 0x37, 0x21, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}};
 
-
 // static const char* FRAMES[] = {
 //     toelter_logo_1,
 //     toelter_logo_1,
 // };
 
-static uint8_t current_frame = 0;
-static uint8_t frame_count = 8;
-static uint8_t toelter_pos = 0;
+static uint8_t current_frame   = 0;
+static uint8_t frame_count     = 8;
+static uint8_t toelter_pos     = 0;
+static bool    render_reversed = false;
 
 static void render_toelter_logo(void) {
-
-    if (timer_elapsed(toelter_pos_timer) >= 1000) {
+    if (timer_elapsed(toelter_pos_timer) >= 800) {
         toelter_pos_timer = timer_read32();
-        toelter_pos = (toelter_pos + 1) % 10;
+
+        if (render_reversed) {
+            toelter_pos--;
+            render_reversed = toelter_pos > 1;
+        } else {
+            toelter_pos++;
+            render_reversed = toelter_pos > 10;
+        }
     }
 
     if (timer_elapsed(toelter_logo_timer) > 120) {
         current_frame = (current_frame + 1) % frame_count;
         oled_clear();
 
-        for (int i = 0; i <= 3; i++) {
+        static char buffer[4][50];
+
+        for (uint8_t i = 0; i <= 3; i++) {
             oled_set_cursor(toelter_pos, i);
-        
+
             switch (current_frame) {
                 case 0:
-                    oled_write_raw_P(toelter_logo_1[i], 50);
+                    memcpy_P(buffer, toelter_logo_1, sizeof(toelter_logo_1));
                     break;
                 case 1:
-                    oled_write_raw_P(toelter_logo_2[i], 50);
+                    memcpy_P(buffer, toelter_logo_2, sizeof(toelter_logo_1));
                     break;
                 case 2:
-                    oled_write_raw_P(toelter_logo_3[i], 50);
+                    memcpy_P(buffer, toelter_logo_3, sizeof(toelter_logo_1));
                     break;
                 case 3:
-                    oled_write_raw_P(toelter_logo_4[i], 50);
+                    memcpy_P(buffer, toelter_logo_4, sizeof(toelter_logo_1));
                     break;
                 case 4:
-                    oled_write_raw_P(toelter_logo_5[i], 50);
+                    memcpy_P(buffer, toelter_logo_5, sizeof(toelter_logo_1));
                     break;
                 case 5:
-                    oled_write_raw_P(toelter_logo_6[i], 50);
+                    memcpy_P(buffer, toelter_logo_6, sizeof(toelter_logo_1));
                     break;
                 case 6:
-                    oled_write_raw_P(toelter_logo_7[i], 50);
+                    memcpy_P(buffer, toelter_logo_7, sizeof(toelter_logo_1));
                     break;
                 case 7:
-                    oled_write_raw_P(toelter_logo_8[i], 50);
+                    memcpy_P(buffer, toelter_logo_8, sizeof(toelter_logo_1));
                     break;
                 default:
                     static char msg_str[2];
@@ -128,8 +124,28 @@ static void render_toelter_logo(void) {
                     oled_write(msg_str, false);
                     break;
             }
+
+            if (render_reversed) {
+                // we reverse the rows
+                for (uint8_t i = 0; i < 4; ++i) {
+                    uint8_t start = 0;
+                    uint8_t end   = 50 - 1;
+
+                    while (start < end) {
+                        // Swap elements within the row
+                        char temp        = buffer[i][start];
+                        buffer[i][start] = buffer[i][end];
+                        buffer[i][end]   = temp;
+
+                        ++start;
+                        --end;
+                    }
+                }
+            }
+
+            oled_write_raw((const char *)buffer[i], 50);
         }
-        
+
         // static char msg_str[1];
         // sprintf(msg_str, "%d", current_frame);
         // oled_set_cursor(10, 0);
@@ -166,8 +182,6 @@ void process_record_keymap_oled(uint16_t keycode) {
     //     set_oled_mode(OLED_MODE_RGB_ON);
     // }
 }
-
-
 
 void render_idle(void) {
     // Host Keyboard LED Status
