@@ -1,116 +1,148 @@
 #include QMK_KEYBOARD_H
 #include "conway.h"
 
-bool current_gen[HEIGHT][WIDTH];
-bool next_gen[HEIGHT][WIDTH];
-bool seeding = false; 
-const short seed_startpos_h = HEIGHT / 2 - SEED_HEIGHT / 2;
-const short seed_startpos_w = WIDTH / 2 - SEED_WIDTH / 2;
-short seed_offset = 0;
+// 40 fps
+#define CONWAY_FRAME_TIMEOUT 1000
 
+#define CONWAY_WIDTH OLED_DISPLAY_HEIGHT / 2
+#define CONWAY_HEIGHT OLED_DISPLAY_WIDTH / 2
+#define CELLS_IN_INT (sizeof(int) * 8)
 
-void render_conway_grid(void) 
-{
-    for(int i = 0; i < OLED_DISPLAY_HEIGHT; i++) {
-        for(int j = 0; j < OLED_DISPLAY_WIDTH; j++) {
-             // oled_write_pixel(j, i, current_gen[i][j]);
-             oled_write_pixel(j, i, current_gen[i][j]);
+int grid[(CONWAY_WIDTH * CONWAY_HEIGHT + CELLS_IN_INT - 1) / CELLS_IN_INT] = {0};
+
+uint16_t anim_timer;
+
+bool is_initialized = false;
+
+void drawPixel(uint8_t x, uint8_t y, bool on) {
+    x *=2;
+    y *=2;
+
+    oled_write_pixel(y, x, on);
+    oled_write_pixel(y + 1, x, on);
+    oled_write_pixel(y, x + 1, on);
+    oled_write_pixel(y + 1, x + 1, on);
+}
+
+// Function to get the state of a cell
+bool getCellState(int x, int y) {
+    int index     = y * CONWAY_WIDTH + x;
+    int bitOffset = index % CELLS_IN_INT;
+    return (grid[index / CELLS_IN_INT] & (1 << bitOffset)) != 0;
+}
+
+// Function to set the state of a cell
+void setCellState(int x, int y, bool state) {
+    int index     = y * CONWAY_WIDTH + x;
+    int bitOffset = index % CELLS_IN_INT;
+    if (state) {
+        grid[index / CELLS_IN_INT] |= (1 << bitOffset);
+    } else {
+        grid[index / CELLS_IN_INT] &= ~(1 << bitOffset);
+    }
+}
+
+// Function to initialize the grid with a glider pattern
+void initializeGrid(void) {
+    // int glider[] = {2, 3, WIDTH + 1, WIDTH + 2, WIDTH + 3};
+    // for (int i = 0; i < sizeof(glider) / sizeof(glider[0]); ++i) {
+    //     int index = glider[i];
+    //     setCellState(index % WIDTH, index / WIDTH, true);
+    // }
+    for (int y = 0; y < CONWAY_HEIGHT; ++y) {
+        for (int x = 0; x < CONWAY_WIDTH; ++x) {
+            setCellState(x, y, rand() & 1);
         }
     }
 }
-int count_neighbours(int row, int col) 
-{
+
+// Function to count live neighbors of a cell
+int countNeighbors(int x, int y) {
     int count = 0;
-    for(int i = -1; i <= 1; i++) {
-        for(int j = -1; j <= 1; j++) {
-            if (i == 0 && j == 0) continue;
-            int r = (row + i + HEIGHT) % HEIGHT;
-            int c = (col + j + WIDTH) % WIDTH;
-            if(current_gen[r][c]) {
-                count++;
+    for (int i = -1; i <= 1; ++i) {
+        for (int j = -1; j <= 1; ++j) {
+            if (i == 0 && j == 0) {
+                continue; // Skip the current cell
+            }
+            int newX = x + i;
+            int newY = y + j;
+            if (newX >= 0 && newX < CONWAY_WIDTH && newY >= 0 && newY < CONWAY_HEIGHT) {
+                count += getCellState(newX, newY);
             }
         }
     }
     return count;
 }
 
-void update_state(void) 
-{
-    for(int i = 0; i < HEIGHT; i++) {
-        for(int j = 0; j < WIDTH; j++) {
-            int neighbours = count_neighbours(i, j);
-            if(current_gen[i][j]) {
-                next_gen[i][j] = !(neighbours < 2 || neighbours > 3);
+// Function to display the current grid
+void displayGrid(void) {
+    for (int y = 0; y < CONWAY_HEIGHT; ++y) {
+        for (int x = 0; x < CONWAY_WIDTH; ++x) {
+            drawPixel(x, y, getCellState(x, y));
+        }
+    }
+    // Add a delay if needed
+    // usleep(500000); // 0.5 seconds
+}
+
+void updateGrid(void) {
+    int newGrid[(CONWAY_WIDTH * CONWAY_HEIGHT + CELLS_IN_INT - 1) / CELLS_IN_INT] = {0};
+
+    for (int y = 0; y < CONWAY_HEIGHT; ++y) {
+        for (int x = 0; x < CONWAY_WIDTH; ++x) {
+            int  index        = y * CONWAY_WIDTH + x;
+            int  bitOffset    = index % CELLS_IN_INT;
+            int  neighbors    = countNeighbors(x, y);
+            bool currentState = getCellState(x, y);
+            if (currentState) {
+                newGrid[index / CELLS_IN_INT] |= ((neighbors == 2 || neighbors == 3) << bitOffset);
             } else {
-                next_gen[i][j] = (neighbours == 3);
+                newGrid[index / CELLS_IN_INT] |= ((neighbors == 3) << bitOffset);
             }
         }
     }
 
-    for(int i = 0; i < HEIGHT; i++) {
-        for(int j = 0; j < WIDTH; j++) {
-            current_gen[i][j] = next_gen[i][j];
-        }
+    // Copy the new grid back to the original grid
+    for (int i = 0; i < sizeof(grid) / sizeof(grid[0]); ++i) {
+        grid[i] = newGrid[i];
     }
 }
 
-void start_state_machine(void)
-{
-    seeding = false;
-}
+void render_conway_grid(void) {
+    if (!is_initialized) {
+        initializeGrid();
+    }
 
-void reset_state_machine(void) 
-{
-    seeding = true;
-    seed_offset = 0;
-    for(int i = 0; i < HEIGHT; i++) {
-        for(int j = 0; j < WIDTH; j++) {
-            current_gen[i][j] = false;
-        }
+    if (timer_elapsed(anim_timer) > CONWAY_FRAME_TIMEOUT) {
+        uprintf("render_conway_grid\n");
+
+        oled_clear();
+        displayGrid();
+        updateGrid();
+
+        oled_render();
+        anim_timer = timer_read32();
     }
 }
 
-void add_seed(uint16_t keycode)
-{
-    int row = seed_startpos_h + seed_offset / SEED_HEIGHT;
-    int col = seed_startpos_w + seed_offset % SEED_WIDTH;
-    switch(keycode) {
-        case SPACE:
-            seed_offset++;  
-            break;
-        case ROWSPACE:
-            seed_offset += SEED_WIDTH;
-            break;
-        default:
-            current_gen[row][col] = true;
-            seed_offset++;
-    }
-
-    if(seed_offset > SEED_WIDTH * SEED_HEIGHT - 1) {
-        seeding = false;
-        seed_offset = 0;
-    }
-}
-
-void process_record_conway(uint16_t keycode)
-{
-    switch (keycode) {
-        case START:
-            // uprintf("start_state_machine \n");
-            start_state_machine();
-            break;
-        case RESET:
-            // uprintf("reset_state_machine \n");
-            reset_state_machine();
-            break;
-        default:
-            if(seeding) {
-                // uprintf("add_seed \n");
-                add_seed(keycode);
-            } else {
-                // uprintf("update_state \n");
-                update_state();
-            }
-    }
+void process_record_conway(uint16_t keycode) {
+    // switch (keycode) {
+    //     case START:
+    //         // uprintf("start_state_machine \n");
+    //         start_state_machine();
+    //         break;
+    //     case RESET:
+    //         // uprintf("reset_state_machine \n");
+    //         reset_state_machine();
+    //         break;
+    //     default:
+    //         if(seeding) {
+    //             // uprintf("add_seed \n");
+    //             add_seed(keycode);
+    //         } else {
+    //             // uprintf("update_state \n");
+    //             update_state();
+    //         }
+    // }
     // render_grid();
 }

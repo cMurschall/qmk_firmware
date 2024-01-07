@@ -137,7 +137,7 @@ void updateSnake(void) {
 
         snake_move_timer = timer_read32();
 
-        uprintf("snake moved (x: %2u, y: %2u)\n", snake[0].headX, snake[0].headY);
+        // uprintf("snake moved (x: %2u, y: %2u)\n", snake[0].headX, snake[0].headY);
     }
     // Draw the snake
 
