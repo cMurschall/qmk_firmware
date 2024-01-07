@@ -8,56 +8,22 @@
 
 #define SNAKE_MAX_LENGTH 32
 
-#ifdef EEPROM_HIGHSCORE
-typedef union {
-  uint8_t raw;
-  struct {
-    uint8_t storedHighScore :8;
-  };
-} gameData_t;
+#define SNAKE_INITIAL_LENGTH 5
 
-gameData_t gameData;
-
-extern gameData_t gameData;
-#endif
 
 /**
  * 
  **/
-void render_game(void);
 
-/**
- * 
- **/
-void moveCheck(void);
 
-// Snake direction enum
-enum snakeDirections {
-    sUP,
-    sRIGHT,
-    sDOWN,
-    sLEFT
-};
+void snake_deinit(void);
+void render_snake_game(void);
 
-/**
- * 
- **/
-uint8_t snake_lastdir; 
 
-/**
- * 
- **/
-uint8_t snake_dir;
+void process_record_snake(uint16_t keycode);
 
-/**
- * 
- **/
-bool snakeRestart;
 
-/**
- * 
- **/
-bool game_is_running;
+
 
 
 #endif

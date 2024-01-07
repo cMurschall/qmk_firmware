@@ -3,7 +3,7 @@
 
 bool current_gen[HEIGHT][WIDTH];
 bool next_gen[HEIGHT][WIDTH];
-bool seeding = true; 
+bool seeding = false; 
 const short seed_startpos_h = HEIGHT / 2 - SEED_HEIGHT / 2;
 const short seed_startpos_w = WIDTH / 2 - SEED_WIDTH / 2;
 short seed_offset = 0;
@@ -96,19 +96,19 @@ void process_record_conway(uint16_t keycode)
 {
     switch (keycode) {
         case START:
-            uprintf("start_state_machine \n");
+            // uprintf("start_state_machine \n");
             start_state_machine();
             break;
         case RESET:
-            uprintf("reset_state_machine \n");
+            // uprintf("reset_state_machine \n");
             reset_state_machine();
             break;
         default:
             if(seeding) {
-                uprintf("add_seed \n");
+                // uprintf("add_seed \n");
                 add_seed(keycode);
             } else {
-                uprintf("update_state \n");
+                // uprintf("update_state \n");
                 update_state();
             }
     }

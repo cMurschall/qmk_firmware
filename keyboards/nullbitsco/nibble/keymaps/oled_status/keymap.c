@@ -82,34 +82,42 @@ void keyboard_post_init_user(void) {
 oled_rotation_t oled_init_user(oled_rotation_t rotation) {
     oled_timer         = timer_read32();
     toelter_logo_timer = timer_read32();
+    toelter_pos_timer = timer_read32();
+
     set_oled_mode(OLED_MODE_IDLE);
     return OLED_ROTATION_0;
 }
 
 bool oled_task_user(void) {
-    switch (get_highest_layer(layer_state)) {
-        case _MA:
-        case _FN: {
-            if (timer_elapsed(oled_timer) >= 3000) {
-                set_oled_mode(OLED_MODE_IDLE);
-            }
-            render_status_frame();
-        } break;
-        case _SNAKE:
-            oled_write_P(PSTR("snake"), false);
-            break;
-        case _CONWAY:
-            render_conway_grid();
-            break;
-
-        default:
-            // Or use the write_ln shortcut over adding '\n' to the end of your string
-            oled_write_ln_P(PSTR("Undefined"), false);
+    if (IS_LAYER_ON(_CONWAY)) {
+        // oled_write_P(PSTR("conway \n"), false);
+        render_conway_grid();
+        return false;
     }
-
+    if (IS_LAYER_ON(_SNAKE)) {
+        // oled_write_P(PSTR("snake \n"), false);
+        render_snake_game();
+        return false;
+    }
+    if (IS_LAYER_ON(_MA) || IS_LAYER_ON(_FN)) {
+        if (timer_elapsed(oled_timer) >= 3000) {
+            set_oled_mode(OLED_MODE_IDLE);
+        }
+        render_status_frame();
+    }
     return false;
 }
 #endif
+
+layer_state_t layer_state_set_user(layer_state_t state) {
+    if (IS_LAYER_OFF_STATE(state, _SNAKE)) {
+#ifdef CONSOLE_ENABLE
+        uprintf("snake deinit\n");
+#endif 
+        snake_deinit();
+    }
+    return state;
+}
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     // Send keystrokes to host keyboard, if connected (see readme)
@@ -121,6 +129,14 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return true;
     }
 #endif
+
+#ifdef SNAKE_ENABLE
+    if (IS_LAYER_ON(_SNAKE) && record->event.pressed) {
+        process_record_snake(keycode);
+        return true;
+    }
+#endif
+
 
     switch (keycode) {
         case RGB_TOG:
