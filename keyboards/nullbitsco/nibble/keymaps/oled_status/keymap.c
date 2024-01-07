@@ -113,9 +113,17 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     if (IS_LAYER_OFF_STATE(state, _SNAKE)) {
 #ifdef CONSOLE_ENABLE
         uprintf("snake deinit\n");
-#endif 
+#endif
         snake_deinit();
     }
+
+    if (IS_LAYER_OFF_STATE(state, _CONWAY)) {
+#ifdef CONSOLE_ENABLE
+        uprintf("conway deinit\n");
+#endif
+        conway_deinit();
+    }
+
     return state;
 }
 

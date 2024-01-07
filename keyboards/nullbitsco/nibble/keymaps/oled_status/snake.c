@@ -65,8 +65,8 @@ void write_pixel(uint8_t x, uint8_t y, bool on) {
 
 // Function to draw a 2x2 pixel block on the screen
 void write_pixel2(uint8_t x, uint8_t y, bool on) {
-    for (int i = x; i < x + 2; i++) {
-        for (int j = y; j < y + 2; j++) {
+    for (uint8_t i = x; i < x + 2; i++) {
+        for (uint8_t j = y; j < y + 2; j++) {
             // Adjust the coordinates based on the size of the pixel block
             oled_write_pixel(j, i, on);
         }
@@ -78,7 +78,7 @@ void initializeSnake(void) {
     snake[0].headX = 15;
     snake[0].headY = 15;
 
-    for (int i = 1; i < SNAKE_INITIAL_LENGTH; i++) {
+    for (uint8_t i = 1; i < SNAKE_INITIAL_LENGTH; i++) {
         snake[i].headX = snake[i - 1].tailX; // Set head based on tail of previous segment
         snake[i].headY = snake[i - 1].tailY;
         snake[i].tailX = snake[i].headX - 2; // Set initial tail coordinates
@@ -94,7 +94,7 @@ bool checkCollision(void) {
     }
 
     // Check self-collision
-    for (int i = 1; i < snakeLength; i++) {
+    for (uint8_t i = 1; i < snakeLength; i++) {
         if (snake[0].headX == snake[i].headX && snake[0].headY == snake[i].headY) {
             return true; // Self-collision
         }
@@ -141,7 +141,7 @@ void updateSnake(void) {
     }
     // Draw the snake
 
-    for (int i = 0; i < snakeLength; i++) {
+    for (uint8_t i = 0; i < snakeLength; i++) {
         // uprintf("draw segment  %u long. draws at (x: %2u, y: %2u)\n", i, snake[i].headX, snake[i].headY);
         write_pixel2(snake[i].headX, snake[i].headY, true);
         write_pixel2(snake[i].tailX, snake[i].tailY, true);
@@ -151,20 +151,28 @@ void updateSnake(void) {
 void process_record_snake(uint16_t keycode) {
     switch (keycode) {
         case KC_UP:
+#ifdef CONSOLE_ENABLE
             uprintf("snake goes up \n");
+#endif
             snake_dir = sUP;
             break;
         case KC_DOWN:
             snake_dir = sDOWN;
+#ifdef CONSOLE_ENABLE
             uprintf("snake goes down \n");
+#endif
             break;
         case KC_RGHT:
             snake_dir = sRIGHT;
+#ifdef CONSOLE_ENABLE
             uprintf("snake goes right \n");
+#endif
             break;
         case KC_LEFT:
             snake_dir = sLEFT;
+#ifdef CONSOLE_ENABLE
             uprintf("snake goes left \n");
+#endif
             break;
         default:
             break;
@@ -183,7 +191,7 @@ void draw_border(void) {
 }
 
 void snake_deinit(void) {
-        snakeInitialised = false;
+    snakeInitialised = false;
 }
 
 void snake_init(void) {
@@ -202,7 +210,7 @@ void render_snake_game(void) {
     if (!snakeInitialised) {
         snake_init();
     }
- 
+
     if (timer_elapsed(anim_timer) > FRAME_TIMEOUT) {
         oled_clear();
 

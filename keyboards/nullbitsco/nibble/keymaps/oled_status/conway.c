@@ -2,21 +2,30 @@
 #include "conway.h"
 
 // 40 fps
-#define CONWAY_FRAME_TIMEOUT 1000
+#define CONWAY_FRAME_TIMEOUT 400
 
 #define CONWAY_WIDTH OLED_DISPLAY_HEIGHT / 2
 #define CONWAY_HEIGHT OLED_DISPLAY_WIDTH / 2
+
+// #define CONWAY_WIDTH 20
+// #define CONWAY_HEIGHT 20
+
 #define CELLS_IN_INT (sizeof(int) * 8)
 
+#define CLAMP(x, lower, upper) (MIN(upper, MAX(x, lower)))
+
 int grid[(CONWAY_WIDTH * CONWAY_HEIGHT + CELLS_IN_INT - 1) / CELLS_IN_INT] = {0};
+
+// Macro to get the state of a cell
+// #define GET_CELL_STATE(x, y) ((grid[((y) / 2) * (WIDTH / 2) + ((x) / 2)] & (1 << (((y) % 2) * 2 + ((x) % 2)))) != 0)
 
 uint16_t anim_timer;
 
 bool is_initialized = false;
 
 void drawPixel(uint8_t x, uint8_t y, bool on) {
-    x *=2;
-    y *=2;
+    x *= 2;
+    y *= 2;
 
     oled_write_pixel(y, x, on);
     oled_write_pixel(y + 1, x, on);
@@ -25,16 +34,16 @@ void drawPixel(uint8_t x, uint8_t y, bool on) {
 }
 
 // Function to get the state of a cell
-bool getCellState(int x, int y) {
-    int index     = y * CONWAY_WIDTH + x;
-    int bitOffset = index % CELLS_IN_INT;
+bool getCellState(uint8_t x, uint8_t y) {
+    uint8_t index     = y * CONWAY_WIDTH + x;
+    uint8_t bitOffset = index % CELLS_IN_INT;
     return (grid[index / CELLS_IN_INT] & (1 << bitOffset)) != 0;
 }
 
 // Function to set the state of a cell
-void setCellState(int x, int y, bool state) {
-    int index     = y * CONWAY_WIDTH + x;
-    int bitOffset = index % CELLS_IN_INT;
+void setCellState(uint8_t x, uint8_t y, bool state) {
+    uint8_t index     = y * CONWAY_WIDTH + x;
+    uint8_t bitOffset = index % CELLS_IN_INT;
     if (state) {
         grid[index / CELLS_IN_INT] |= (1 << bitOffset);
     } else {
@@ -43,31 +52,63 @@ void setCellState(int x, int y, bool state) {
 }
 
 // Function to initialize the grid with a glider pattern
-void initializeGrid(void) {
-    // int glider[] = {2, 3, WIDTH + 1, WIDTH + 2, WIDTH + 3};
-    // for (int i = 0; i < sizeof(glider) / sizeof(glider[0]); ++i) {
-    //     int index = glider[i];
-    //     setCellState(index % WIDTH, index / WIDTH, true);
+void initializeGridGlider(void) {
+#ifdef CONSOLE_ENABLE
+    uprintf("conway init \n");
+#endif
+    int newGrid[(CONWAY_WIDTH * CONWAY_HEIGHT + CELLS_IN_INT - 1) / CELLS_IN_INT] = {0};
+
+    // Copy the new grid back to the original grid
+    for (uint8_t i = 0; i < sizeof(grid) / sizeof(grid[0]); ++i) {
+        grid[i] = newGrid[i];
+    }
+
+    int glider[] = {2, 3, WIDTH + 1, WIDTH + 2, WIDTH + 3};
+    for (uint8_t i = 0; i < sizeof(glider) / sizeof(glider[0]); ++i) {
+        uint8_t index = glider[i];
+        setCellState(index % WIDTH, index / WIDTH, true);
+    }
+    // for (int y = 0; y < CONWAY_HEIGHT; ++y) {
+    //     for (int x = 0; x < CONWAY_WIDTH; ++x) {
+    //         setCellState(x, y, rand() & 1);
+    //     }
     // }
-    for (int y = 0; y < CONWAY_HEIGHT; ++y) {
-        for (int x = 0; x < CONWAY_WIDTH; ++x) {
+
+    is_initialized = true;
+}
+
+void initializeGridRandom(void) {
+#ifdef CONSOLE_ENABLE
+    uprintf("conway init random \n");
+#endif
+    int newGrid[(CONWAY_WIDTH * CONWAY_HEIGHT + CELLS_IN_INT - 1) / CELLS_IN_INT] = {0};
+
+    // Copy the new grid back to the original grid
+    for (uint8_t i = 0; i < sizeof(grid) / sizeof(grid[0]); ++i) {
+        grid[i] = newGrid[i];
+    }
+
+    for (uint8_t y = 0; y < CONWAY_HEIGHT; ++y) {
+        for (uint8_t x = 0; x < CONWAY_WIDTH; ++x) {
             setCellState(x, y, rand() & 1);
         }
     }
+
+    is_initialized = true;
 }
 
 // Function to count live neighbors of a cell
-int countNeighbors(int x, int y) {
-    int count = 0;
-    for (int i = -1; i <= 1; ++i) {
-        for (int j = -1; j <= 1; ++j) {
+uint8_t countNeighbors(uint8_t x, uint8_t y) {
+    uint8_t count = 0;
+    for (uint8_t i = -1; i <= 1; ++i) {
+        for (uint8_t j = -1; j <= 1; ++j) {
             if (i == 0 && j == 0) {
                 continue; // Skip the current cell
             }
-            int newX = x + i;
-            int newY = y + j;
-            if (newX >= 0 && newX < CONWAY_WIDTH && newY >= 0 && newY < CONWAY_HEIGHT) {
-                count += getCellState(newX, newY);
+            uint8_t newX = CLAMP(x + i, 0, CONWAY_WIDTH);
+            uint8_t newY = CLAMP(y + j, 0, CONWAY_HEIGHT);
+            if (getCellState(newX, newY)) {
+                count += 1;
             }
         }
     }
@@ -76,8 +117,8 @@ int countNeighbors(int x, int y) {
 
 // Function to display the current grid
 void displayGrid(void) {
-    for (int y = 0; y < CONWAY_HEIGHT; ++y) {
-        for (int x = 0; x < CONWAY_WIDTH; ++x) {
+    for (uint8_t y = 0; y < CONWAY_HEIGHT; ++y) {
+        for (uint8_t x = 0; x < CONWAY_WIDTH; ++x) {
             drawPixel(x, y, getCellState(x, y));
         }
     }
@@ -88,12 +129,12 @@ void displayGrid(void) {
 void updateGrid(void) {
     int newGrid[(CONWAY_WIDTH * CONWAY_HEIGHT + CELLS_IN_INT - 1) / CELLS_IN_INT] = {0};
 
-    for (int y = 0; y < CONWAY_HEIGHT; ++y) {
-        for (int x = 0; x < CONWAY_WIDTH; ++x) {
-            int  index        = y * CONWAY_WIDTH + x;
-            int  bitOffset    = index % CELLS_IN_INT;
-            int  neighbors    = countNeighbors(x, y);
-            bool currentState = getCellState(x, y);
+    for (uint8_t y = 0; y < CONWAY_HEIGHT; ++y) {
+        for (uint8_t x = 0; x < CONWAY_WIDTH; ++x) {
+            uint8_t index        = y * CONWAY_WIDTH + x;
+            uint8_t bitOffset    = index % CELLS_IN_INT;
+            uint8_t neighbors    = countNeighbors(x, y);
+            bool    currentState = getCellState(x, y);
             if (currentState) {
                 newGrid[index / CELLS_IN_INT] |= ((neighbors == 2 || neighbors == 3) << bitOffset);
             } else {
@@ -103,18 +144,18 @@ void updateGrid(void) {
     }
 
     // Copy the new grid back to the original grid
-    for (int i = 0; i < sizeof(grid) / sizeof(grid[0]); ++i) {
+    for (uint8_t i = 0; i < sizeof(grid) / sizeof(grid[0]); ++i) {
         grid[i] = newGrid[i];
     }
 }
 
 void render_conway_grid(void) {
     if (!is_initialized) {
-        initializeGrid();
+        initializeGridRandom();
     }
 
     if (timer_elapsed(anim_timer) > CONWAY_FRAME_TIMEOUT) {
-        uprintf("render_conway_grid\n");
+        // uprintf("render_conway_grid\n");
 
         oled_clear();
         displayGrid();
@@ -125,24 +166,19 @@ void render_conway_grid(void) {
     }
 }
 
+void conway_deinit(void) {
+    is_initialized = false;
+}
+
 void process_record_conway(uint16_t keycode) {
-    // switch (keycode) {
-    //     case START:
-    //         // uprintf("start_state_machine \n");
-    //         start_state_machine();
-    //         break;
-    //     case RESET:
-    //         // uprintf("reset_state_machine \n");
-    //         reset_state_machine();
-    //         break;
-    //     default:
-    //         if(seeding) {
-    //             // uprintf("add_seed \n");
-    //             add_seed(keycode);
-    //         } else {
-    //             // uprintf("update_state \n");
-    //             update_state();
-    //         }
-    // }
-    // render_grid();
+    switch (keycode) {
+        case KC_BSPC:
+            initializeGridGlider();
+            break;
+        case KC_ENT:
+            initializeGridRandom();
+            break;
+        default:
+            break;
+    }
 }

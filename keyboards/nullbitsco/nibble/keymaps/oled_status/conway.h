@@ -14,6 +14,8 @@
 
 void process_record_conway(uint16_t keycode);
 
+void conway_deinit(void);
+
 void render_conway_grid(void);
 
 #endif // CONWAY_H
