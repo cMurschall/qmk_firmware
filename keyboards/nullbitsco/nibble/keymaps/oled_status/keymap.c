@@ -179,6 +179,13 @@ bool encoder_update_user(uint8_t index, bool clockwise) {
         process_record_encoder_oled(KC_VOLD);
 #endif
     }
+
+
+#ifdef SNAKE_ENABLE
+    encoder_update_snake(index, clockwise);
+#endif
+
+
     return true;
 }
 

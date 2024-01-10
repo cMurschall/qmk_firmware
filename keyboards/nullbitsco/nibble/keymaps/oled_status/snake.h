@@ -21,7 +21,7 @@ void render_snake_game(void);
 
 
 void process_record_snake(uint16_t keycode);
-
+void encoder_update_snake(uint8_t index, bool clockwise);
 
 
 

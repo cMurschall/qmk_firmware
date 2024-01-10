@@ -20,6 +20,8 @@
 // Update game values in ms
 #ifndef GAME__INITIALSPEED
 #    define GAME_INITIAL_SPEED 300
+#    define GAME_MAX_SPEED 40
+
 #endif
 
 #define GAME_DISPLAY_WIDTH OLED_DISPLAY_HEIGHT
@@ -163,7 +165,7 @@ void updateSnake(void) {
     if (hasEatenFruit()) {
         append_snake_segment();
         spawn_fruit();
-        game_speed = MAX(game_speed - 20, 40);
+        game_speed = MAX(game_speed - 20, GAME_MAX_SPEED);
 
         fuit_counter++;
         fuit_render_counter = 3;
@@ -282,5 +284,13 @@ void render_snake_game(void) {
         oled_render();
 
         anim_timer = timer_read32();
+    }
+}
+
+void encoder_update_snake(uint8_t index, bool clockwise) {
+    if (clockwise) {
+        game_speed = MAX(game_speed - 20, GAME_MAX_SPEED);
+    } else {
+        game_speed = MAX(game_speed + 20, GAME_MAX_SPEED);
     }
 }
