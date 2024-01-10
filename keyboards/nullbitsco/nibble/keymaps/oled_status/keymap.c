@@ -107,6 +107,7 @@ bool oled_task_user(void) {
     }
     return false;
 }
+
 #endif
 
 layer_state_t layer_state_set_user(layer_state_t state) {
@@ -168,6 +169,13 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 }
 
 bool encoder_update_user(uint8_t index, bool clockwise) {
+#ifdef SNAKE_ENABLE
+    if (IS_LAYER_ON(_SNAKE)) {
+        encoder_update_snake(index, clockwise);
+        return false;
+    }
+#endif
+
     if (clockwise) {
         tap_code(KC_VOLU);
 #ifdef OLED_ENABLE
@@ -181,9 +189,6 @@ bool encoder_update_user(uint8_t index, bool clockwise) {
     }
 
 
-#ifdef SNAKE_ENABLE
-    encoder_update_snake(index, clockwise);
-#endif
 
 
     return true;
