@@ -70,8 +70,10 @@ static uint8_t frame_count     = 8;
 static uint8_t toelter_pos     = 0;
 static bool    render_reversed = false;
 
+uint16_t toelter_pos_time = 800;
+
 static void render_toelter_logo(void) {
-    if (timer_elapsed(toelter_pos_timer) >= 800) {
+    if (timer_elapsed(toelter_pos_timer) >= toelter_pos_time) {
         toelter_pos_timer = timer_read32();
 
         if (render_reversed) {
@@ -163,10 +165,24 @@ void process_record_encoder_oled(uint16_t keycode) {
     oled_timer = timer_read32();
     switch (keycode) {
         case KC_VOLU:
-            set_oled_mode(OLED_MODE_VOLUME_UP);
+            if (get_mods() & MOD_MASK_SHIFT) {
+                toelter_pos_time = MAX(toelter_pos_time - 50, 50);
+#ifdef CONSOLE_ENABLE
+                uprintf("oled volume up. speed: %2u \n", toelter_pos_time);
+#endif
+            } else {
+                set_oled_mode(OLED_MODE_VOLUME_UP);
+            }
             break;
         case KC_VOLD:
-            set_oled_mode(OLED_MODE_VOLUME_DOWN);
+            if (get_mods() & MOD_MASK_SHIFT) {
+                toelter_pos_time = MAX(toelter_pos_time + 50, 50);
+#ifdef CONSOLE_ENABLE
+                uprintf("oled volume down. speed: %2u \n", toelter_pos_time);
+#endif
+            } else {
+                set_oled_mode(OLED_MODE_VOLUME_DOWN);
+            }
             break;
         default:
             set_oled_mode(OLED_MODE_IDLE);
