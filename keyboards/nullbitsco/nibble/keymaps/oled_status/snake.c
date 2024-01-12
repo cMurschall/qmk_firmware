@@ -24,41 +24,34 @@
 
 #endif
 
-#define GAME_DISPLAY_WIDTH OLED_DISPLAY_HEIGHT
-#define GAME_DISPLAY_HEIGHT OLED_DISPLAY_WIDTH
+#define GAME_DISPLAY_WIDTH (OLED_DISPLAY_HEIGHT / 2)
+#define GAME_DISPLAY_HEIGHT (OLED_DISPLAY_WIDTH / 2)
 
 #define CLAMP(x, lower, upper) (MIN(upper, MAX(x, lower)))
 
-// Snake structure with head and tail coordinates
-typedef struct {
-    uint8_t headX;
-    uint8_t headY;
-    uint8_t tailX;
-    uint8_t tailY;
-} SnakeSegment;
-
-// Fruit structure with coordinates
+// segment structure with head and tail coordinates
 typedef struct {
     uint8_t x;
     uint8_t y;
-} Fruit;
+} Segment;
+
 
 // Snake direction enum
 typedef enum { sUP = 0, sRIGHT, sDOWN, sLEFT } snakeDirections;
 
 // Initialize the snake
 uint8_t      snakeLength = SNAKE_INITIAL_LENGTH;
-SnakeSegment snake[SNAKE_MAX_LENGTH]; // Maximum possible length
+Segment snake[SNAKE_MAX_LENGTH]; // Maximum possible length
 
 snakeDirections snake_dir        = sRIGHT;
 bool            snakeInitialised = false;
 
 uint16_t game_speed = GAME_INITIAL_SPEED;
 
-Fruit fruit; // Declare a global variable for the fruit
+Segment fruit; // Declare a global variable for the fruit
 
-uint8_t fuit_counter;
-uint8_t fuit_render_counter;
+uint8_t  fuit_counter;
+uint16_t fuit_render_timer;
 
 uint16_t anim_timer = 0;
 
@@ -69,13 +62,15 @@ void write_pixel(uint8_t x, uint8_t y, bool on) {
 }
 
 // Function to draw a 2x2 pixel block on the screen
-void write_pixel2(uint8_t x, uint8_t y, bool on) {
-    for (int i = x; i < x + 2; i++) {
-        for (int j = y; j < y + 2; j++) {
-            // Adjust the coordinates based on the size of the pixel block
-            oled_write_pixel(j, i, on);
-        }
-    }
+void write_snake_pixel(uint8_t x, uint8_t y, bool on) {
+    x *= 2;
+    y *= 2;
+
+    oled_write_pixel(y, x, on);
+    oled_write_pixel(y, x + 1, on);
+
+    oled_write_pixel(y + 1, x, on);
+    oled_write_pixel(y + 1, x + 1, on);
 }
 
 // Function to spawn a fruit at a random location
@@ -88,21 +83,19 @@ void spawn_fruit(void) {
 void initialize_snake(void) {
     srand(timer_read32());
 
-    fuit_counter        = 0;
-    fuit_render_counter = 0;
-    game_speed          = GAME_INITIAL_SPEED;
+    fuit_counter      = 0;
+    fuit_render_timer = timer_read32();
+    game_speed        = GAME_INITIAL_SPEED;
 
     snakeLength = SNAKE_INITIAL_LENGTH;
     snake_dir   = sRIGHT;
 
-    snake[0].headX = 15;
-    snake[0].headY = 15;
+    snake[0].x = 15;
+    snake[0].y = 15;
 
     for (int i = 1; i < SNAKE_INITIAL_LENGTH; i++) {
-        snake[i].headX = snake[i - 1].tailX; // Set head based on tail of previous segment
-        snake[i].headY = snake[i - 1].tailY;
-        snake[i].tailX = snake[i].headX - 2; // Set initial tail coordinates
-        snake[i].tailY = snake[i].headY;
+        snake[i].x = snake[i - 1].x + 1; // Set the x-coordinate for the current segment
+        snake[i].y = snake[i - 1].y;     // Set the y-coordinate for the current segment
     }
 }
 
@@ -111,54 +104,59 @@ void append_snake_segment(void) {
     // Check if the snake has reached its maximum length
     if (snakeLength < SNAKE_MAX_LENGTH) {
         // Update the tail coordinates to the current head coordinates
-        snake[snakeLength].tailX = snake[0].headX;
-        snake[snakeLength].tailY = snake[0].headY;
+        snake[snakeLength].x = snake[snakeLength - 1].x;
+        snake[snakeLength].y = snake[snakeLength - 1].y;
 
         // Increment the length of the snake
         snakeLength++;
     }
 }
 
-// Function to check if the snake has eaten the fruit
-bool hasEatenFruit(void) {
-    // Assuming each snake segment occupies a 2x2 pixel area
-    for (int i = 0; i < snakeLength; ++i) {
-        // Check if any part of the snake (head or tail) is on the fruit
-        if ((snake[i].headX <= fruit.x && fruit.x < snake[i].headX + 2) && (snake[i].headY <= fruit.y && fruit.y < snake[i].headY + 2)) {
-            return true;
-        }
-
-        if ((snake[i].tailX <= fruit.x && fruit.x < snake[i].tailX + 2) && (snake[i].tailY <= fruit.y && fruit.y < snake[i].tailY + 2)) {
-            return true;
+// Function to check if the snake collided with itself or the game boundaries
+bool check_collision(void) {
+    // Check collision with itself
+    for (int i = 1; i < snakeLength; i++) {
+        if (snake[0].x == snake[i].x && snake[0].y == snake[i].y) {
+            return true; // Collision with itself
         }
     }
 
-    return false;
+    // Check collision with game boundaries (you might need to adjust this based on your game grid)
+    if (snake[0].x < 0 || snake[0].x >= GAME_DISPLAY_WIDTH || snake[0].y < 0 || snake[0].y >= GAME_DISPLAY_HEIGHT) {
+        return true; // Collision with boundaries
+    }
+
+    // Additional collision checks can be added here, e.g., collision with other game objects
+
+    return false; // No collision
+}
+
+// Function to check if the snake has eaten the fruit
+bool hasEatenFruit(void) {
+    return (snake[0].x == fruit.x) && (snake[0].y == fruit.y);
 }
 
 // Function to update and draw the snake
 void updateSnake(void) {
     // Move the snake
     for (uint8_t i = snakeLength - 1; i > 0; i--) {
-        snake[i].headX = snake[i - 1].headX;
-        snake[i].headY = snake[i - 1].headY;
-        snake[i].tailX = snake[i - 1].tailX; // Adjust the tail coordinates
-        snake[i].tailY = snake[i - 1].tailY;
+        snake[i].x = snake[i - 1].x;
+        snake[i].y = snake[i - 1].y;
     }
 
     // Move the head
     switch (snake_dir) {
         case sRIGHT: // right
-            snake[0].headY = CLAMP(snake[0].headY + 2, 0, GAME_DISPLAY_HEIGHT);
+            snake[0].y = CLAMP(snake[0].y + 1, 0, GAME_DISPLAY_HEIGHT);
             break;
         case sUP: // up
-            snake[0].headX = CLAMP(snake[0].headX - 2, 0, GAME_DISPLAY_WIDTH);
+            snake[0].x = CLAMP(snake[0].x - 1, 0, GAME_DISPLAY_WIDTH);
             break;
         case sLEFT: // left
-            snake[0].headY = CLAMP(snake[0].headY - 2, 0, GAME_DISPLAY_HEIGHT);
+            snake[0].y = CLAMP(snake[0].y - 1, 0, GAME_DISPLAY_HEIGHT);
             break;
         case sDOWN: // down
-            snake[0].headX = CLAMP(snake[0].headX + 2, 0, GAME_DISPLAY_WIDTH);
+            snake[0].x = CLAMP(snake[0].x + 1, 0, GAME_DISPLAY_WIDTH);
             break;
     }
 
@@ -168,7 +166,7 @@ void updateSnake(void) {
         game_speed = MAX(game_speed - 20, GAME_MAX_SPEED);
 
         fuit_counter++;
-        fuit_render_counter = 3;
+        fuit_render_timer = timer_read32();
 
 #ifdef CONSOLE_ENABLE
         uprintf("snake eats fruit. new game speed %2u. fruits eaten: %2u. \n", game_speed, fuit_counter);
@@ -182,55 +180,55 @@ void draw_snake(void) {
     // Draw the snake
 
     for (int i = 0; i < snakeLength - 1; i++) {
-        // uprintf("draw segment  %u long. draws at (x: %2u, y: %2u)\n", i, snake[i].headX, snake[i].headY);
-        write_pixel2(snake[i].headX, snake[i].headY, true);
-        write_pixel2(snake[i].tailX, snake[i].tailY, true);
+        write_snake_pixel(snake[i].x, snake[i].y, true);
     }
-    write_pixel2(0,0,false);
+    // write_snake_pixel(0, 0, false);
 }
 
 void draw_fruit(void) {
-    write_pixel2(fruit.x, fruit.y, true);
+    write_snake_pixel(fruit.x, fruit.y, true);
 }
 
 void draw_fuit_counter(void) {
-    if (fuit_render_counter > 0) {
+    if (!(timer_elapsed(fuit_render_timer) > 2000)) {
 #ifdef CONSOLE_ENABLE
         uprintf("render fruit score\n");
 #endif
-        static char msg_str[3];
-        sprintf(msg_str, "%2u", fuit_counter);
         oled_set_cursor(0, 0);
-        oled_write(msg_str, false);
-        fuit_render_counter--;
+        if (fuit_counter) {
+            static char fruit_msg_str[3];
+            sprintf(fruit_msg_str, "%2u", fuit_counter);
+            oled_write(fruit_msg_str, false);
+        } else {
+            oled_write_P(PSTR("snake"), false);
+        }
     }
+}
+
+void update_snake_direction(snakeDirections new_direction) {
+    // Prevent changing from up to down or from down to up, and from left to right or from right to left
+    if ((snake_dir == sUP && new_direction == sDOWN) || (snake_dir == sDOWN && new_direction == sUP) || (snake_dir == sLEFT && new_direction == sRIGHT) || (snake_dir == sRIGHT && new_direction == sLEFT)) {
+        // Do nothing
+        return;
+    }
+
+    // Update the snake direction
+    snake_dir = new_direction;
 }
 
 void process_record_snake(uint16_t keycode) {
     switch (keycode) {
         case KC_UP:
-#ifdef CONSOLE_ENABLE
-            uprintf("snake goes up \n");
-#endif
-            snake_dir = sUP;
+            update_snake_direction(sUP);
             break;
         case KC_DOWN:
-            snake_dir = sDOWN;
-#ifdef CONSOLE_ENABLE
-            uprintf("snake goes down \n");
-#endif
+            update_snake_direction(sDOWN);
             break;
         case KC_RGHT:
-            snake_dir = sRIGHT;
-#ifdef CONSOLE_ENABLE
-            uprintf("snake goes right \n");
-#endif
+            update_snake_direction(sRIGHT);
             break;
         case KC_LEFT:
-            snake_dir = sLEFT;
-#ifdef CONSOLE_ENABLE
-            uprintf("snake goes left \n");
-#endif
+            update_snake_direction(sLEFT);
             break;
         default:
             break;
@@ -238,13 +236,13 @@ void process_record_snake(uint16_t keycode) {
 }
 
 void draw_border(void) {
-    for (uint8_t x = 0; x < GAME_DISPLAY_WIDTH; x++) {
+    for (uint8_t x = 0; x < GAME_DISPLAY_WIDTH * 2; x++) {
         oled_write_pixel(0, x, true);
-        oled_write_pixel(GAME_DISPLAY_HEIGHT - 1, x, true);
+        oled_write_pixel(GAME_DISPLAY_HEIGHT * 2 - 1, x, true);
     }
-    for (uint8_t y = 0; y < GAME_DISPLAY_HEIGHT; y++) {
+    for (uint8_t y = 0; y < GAME_DISPLAY_HEIGHT * 2; y++) {
         oled_write_pixel(y, 0, true);
-        oled_write_pixel(y, GAME_DISPLAY_WIDTH - 1, true);
+        oled_write_pixel(y, GAME_DISPLAY_WIDTH * 2 - 1, true);
     }
 }
 
@@ -268,12 +266,18 @@ void render_snake_game(void) {
         snake_init();
         spawn_fruit();
     }
+    if (check_collision()) {
+#ifdef CONSOLE_ENABLE
+        uprintf("game over\n");
+        snake_deinit();
+#endif
+    }
 
     if (timer_elapsed(anim_timer) > game_speed) {
         oled_clear();
 
         // Update and draw the snake
-        // draw_border();
+        draw_border();
 
         updateSnake();
         draw_snake();
